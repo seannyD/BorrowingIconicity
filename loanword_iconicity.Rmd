@@ -11,6 +11,8 @@ try(setwd("~/Documents/MPI/MonaghanAoA/Iconicity/"))
 
 # Introduction
 
+This file shows the R code for the analyses in *Iconicity and diachronic langauge change*. We show whether a word is borrowed or not can be predicted by its iconicity.
+
 Below is a list of variable names in the data with a short explanation:
 
 -  word: Orthographic form
