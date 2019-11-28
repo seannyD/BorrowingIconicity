@@ -279,9 +279,9 @@ Now we model the main data. We first replicate the GAM from Monaghan & Roberts (
 
 ```{r}
 m0 = bam(bor15.cat ~
-      s(phonlengthscale) + 
-      s(AoAscale) + 
       s(subtlexzipfscale) +
+      s(AoAscale) + 
+      s(phonlengthscale) + 
       s(concscale) +
       s(cat,bs='re')+
       s(cat,phonlengthscale,bs='re')+
