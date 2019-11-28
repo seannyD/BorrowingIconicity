@@ -1,0 +1,469 @@
+---
+title: "Supporting materials for Iconicity and diachronic language change"
+output: pdf_document
+---
+
+```{r echo=F,eval=F}
+try(setwd("~/Box Sync/papersonthego/ICONICITY_LOANWORDS/"))
+try(setwd("~/Documents/MPI/MonaghanAoA/Iconicity/"))
+```
+
+
+# Introduction
+
+Below is a list of variable names in the data with a short explanation:
+
+-  word: Orthographic form
+-  borrowing: variable from WOLD indicating level of evidence for borrowing (1 = definately borrowed, 5 = no evidence of borrowing).
+-  bor15, bor15.cat:  Conversion of the WOLD borrowing variable into a numeric (0 = not borrowed, 1 = borrowed).
+-  phonology:  Phonological form
+-  phonlength:  Number of segments in the phonological form
+-  AoA: Age of acquisition ratings from Kuperman, Stadthagen-Gonzalez, and Brysbaert (2012).
+-  AoA\_obj: Objective, test-based age of acuqisition from Brysbaert & Biemiller (2017)
+-  subtlexzipf:  Log frequency of word from the SUBTLEX database
+-  conc:  Concreteness ratings from Brysbaert, Warriner, & Kuperman (2014)
+-  cat: Dominant part of speech according to SUBTLEX.
+-  age\_oldest, age\_youngest: Dates from WOLD indicating estiamte of data of entry into English.
+-  age\_oldest\_num, age\_youngest\_num, age: Conversions into numeric year values for oldest, youngest and average estimate.
+-  pagel_rate: Rate of lexical replacement from Pagel, Atkinson & Meade (2007)
+-  iconicity: Iconicity rating from Winter et al. (2017). The data actually comes from the supporting materials for Perry et al. (2018), which has slightly more data.
+-  systematicity: Systematicity ratings from Monaghan et al. (2014)
+
+## References
+
+Kuperman, V., Stadthagen-Gonzalez, H., & Brysbaert, M. (2012). Age-of-acquisition ratings for 30,000 English words. Behavior research methods, 44(4), 978-990.
+
+Brysbaert, M., & Biemiller, A. (2017). Test-based age-of-acquisition norms for 44 thousand English word meanings. Behavior research methods, 49(4), 1520-1523.
+
+Brysbaert, M., Warriner, A. B., & Kuperman, V. (2014). Concreteness ratings for 40 thousand generally known English word lemmas. Behavior research methods, 46(3), 904-911.
+
+Pagel, M., Atkinson, Q. D., & Meade, A. (2007). Frequency of word-use predicts rates of lexical evolution throughout Indo-European history. Nature, 449(7163), 717.
+
+Monaghan, P., Lupyan, G., & Christiansen, M. (2014). The systematicity of the sign: Modeling activation of semantic attributes from nonwords. In Proceedings of the Annual Meeting of the Cognitive Science Society (Vol. 36, No. 36).
+
+Winter, B., Perlman, M., Perry, L. K., & Lupyan, G. (2017). Which words are most iconic?. Interaction Studies, 18(3), 443-464.
+
+Perry, L. K., Perlman, M., Winter, B., Massaro, D. W., & Lupyan, G. (2018). Iconicity in the speech of children and adults. Developmental Science, 21(3), e12572.
+
+\newpage
+\clearpage
+
+# Load libraries
+
+```{r message=F,warning=F}
+library(mgcv)
+library(lattice)
+library(ggplot2)
+library(party)
+library(gridExtra)
+library(Hmisc)
+library(survival)
+library(Formula)
+```
+
+Custom functions for rescaling gam results and making table of correlations. This also loads the custom script *GAM_derivatives.R* which runs the analysis of slope significance.
+
+```{r}
+# functions for plotting:
+logit2per = function(X){
+  return(exp(X)/(1+exp(X)))
+}
+
+corstars <-function(x, method=c("pearson", "spearman"), removeTriangle=c("upper", "lower"),
+                    result=c("none", "html", "latex")){
+  #Compute correlation matrix
+  require(Hmisc)
+  x <- as.matrix(x)
+  correlation_matrix<-rcorr(x, type=method[1])
+  R <- correlation_matrix$r # Matrix of correlation coeficients
+  p <- correlation_matrix$P # Matrix of p-value 
+  
+  ## Define notions for significance levels; spacing is important.
+  mystars <- ifelse(p < .001, "***", ifelse(p < .01, "**", ifelse(p < .05, "* ", "  ")))
+  
+  ## trunctuate the correlation matrix to two decimal
+  R <- format(round(cbind(rep(-1.11, ncol(x)), R), 3))[,-1]
+  
+  ## build a new matrix that includes the correlations with their apropriate stars
+  Rnew <- matrix(paste(R, mystars, sep=""), ncol=ncol(x))
+  diag(Rnew) <- paste(diag(R), " ", sep="")
+  rownames(Rnew) <- colnames(x)
+  colnames(Rnew) <- paste(colnames(x), "", sep="")
+  
+  ## remove upper triangle of correlation matrix
+  #if(removeTriangle[1]=="upper"){
+    Rnew <- as.matrix(Rnew)
+    Rnew[upper.tri(Rnew, diag = TRUE)] <- ""
+    Rnew <- as.data.frame(Rnew)
+  #}
+  
+  ## remove lower triangle of correlation matrix
+  if(removeTriangle[1]=="lower"){
+    Rnew = t(Rnew)
+    Rnew = Rnew[,-1]
+  } else{
+    Rnew <- Rnew[-1,]
+  }
+  
+  if (result[1]=="none") return(Rnew)
+  else{
+    if(result[1]=="html") print(xtable(Rnew), type="html")
+    else print(xtable(Rnew), type="latex") 
+  }
+} 
+
+rescaleGam = function(px, n, xvar, xlab="",breaks=NULL,xlim=NULL){
+  y = logit2per(px[[n]]$fit)
+  x = px[[n]]$x *attr(xvar,"scaled:scale") + attr(xvar,"scaled:center")
+  se.upper = logit2per(px[[n]]$fit+px[[n]]$se)
+  se.lower = logit2per(px[[n]]$fit-px[[n]]$se)
+  dx = data.frame(x=x,y=y,ci.upper=se.upper,ci.lower=se.lower)
+  plen = ggplot(dx, aes(x=x,y=y))+
+    geom_ribbon(aes(ymin=ci.lower,ymax=ci.upper), alpha=0.3)+
+    geom_line(size=1,linetype=3) +
+    xlab(xlab)+
+    ylab("Probability of borrowing")
+  if(!is.null(breaks)){
+    plen = plen + scale_x_continuous(breaks = breaks)
+  }
+  if(!is.null(xlim)){
+   plen = plen + coord_cartesian(ylim = c(0,1),xlim=xlim)
+  } else{
+    plen = plen + coord_cartesian(ylim = c(0,1))
+  }
+  return(plen)
+}
+
+# Code for assessing significance of GAM slopes
+source("GAM_derivaties.R")
+```
+
+
+
+# Load data
+
+Load in borrowing data, with pagel lexical replacement rate and the Winter et al. iconicity ratings. The data also includes the systematicity ratings from Monaghan et al. (2014). For posterity, we note the command line commands to create the data file:
+
+```{r eval=F}
+cat iconicity_ratings.csv loanwords9.csv | gawk 'BEGIN{FS=",";OFS=","}
+  {if(NR<=3002)i[$1]=$2;
+  else {if(i[$1]>0)print $0,i[$1];else print $0,"#N/A"}}' > loanwords_withiconicity.csv
+cat monaghan2014_systematicity.csv loanwords_withiconicity.csv | gawk 'BEGIN{FS=",";OFS=","}
+  {if(NR<=2911)i[$1]=$NF;
+    else {if(i[$1]>0)print $0,i[$1];
+    else print $0,"#N/A"}}' > loanwords_withiconicity_systematicity.csv
+```
+
+Load data and create key variables.
+
+```{r warning=F}
+datafile = "loanwords_withiconicity_systematicity.csv"
+dataloan <- read.csv(datafile,stringsAsFactors = F)
+dataloan$pagel_rate = as.numeric(dataloan$pagel_rate)
+dataloan$iconicity = as.numeric(dataloan$iconicity)
+dataloan$subtlexzipf = as.numeric(dataloan$subtlexzipf)
+dataloan$AoA = as.numeric(dataloan$AoA)
+dataloan$phonlength = as.numeric(dataloan$phonlength)
+dataloan$systematicity = as.numeric(dataloan$systematicity)
+dataloan$conc = as.numeric(dataloan$conc)
+dataloan$cat = factor(dataloan$cat)
+```
+
+We want to use the iconcity data from Winter et al. (2017). However, the SI for Perry et al. (2018) have slightly more data. Here we show that the values are the same, and use the Perry et al. source which has more data:
+
+```{r}
+i = read.csv("iconicity_PerryEtAl2018.csv",stringsAsFactors = F)
+dataloan$iconicity2 = i[match(dataloan$word,i$Word),]$Iconicity
+plot(dataloan$iconicity,dataloan$iconicity2)
+apply(dataloan[,c("iconicity",'iconicity2')],2,function(X){sum(!is.na(X))})
+dataloan$iconicity = dataloan$iconicity2
+```
+
+# Data preperation
+
+Create binary borrowing variable:
+
+```{r}
+dataloan$bor15 <- ifelse(dataloan$borrowing==1,1, ifelse(dataloan$borrowing==5,0,NA))
+dataloan$bor15.cat <- factor(dataloan$bor15)
+```
+
+
+Percentage of missing data for each variable:
+
+```{r}
+prop = apply(dataloan[,c("phonlength","AoA",
+               "subtlexzipf", "cat", "iconicity", "systematicity",
+               'conc','bor15')],2,
+      function(X){sum(is.na(X))})/nrow(dataloan)
+t(t(round(prop*100,2)))
+```
+
+There is too little data if we include only data with values for systematicity. So instead we omit systematicity:
+
+```{r}
+dataloan2 = dataloan[complete.cases(dataloan[,
+               c("phonlength","AoA",
+               "subtlexzipf", "cat", "iconicity",
+               'conc','bor15')]),]
+```
+
+This leaves `r nrow(dataloan2)` observations.
+
+Make correlation table:
+
+```{r}
+corstars(dataloan2[,c("subtlexzipf",
+                          "AoA","phonlength",
+                           'conc',
+                          "iconicity")],
+        removeTriangle = "lower")
+```
+
+Correlation table just for nouns:
+
+```{r}
+corstars(dataloan2[dataloan2$cat=="Noun",
+                   c("subtlexzipf",
+                      "AoA","phonlength",
+                      'conc',
+                      "iconicity")],
+         removeTriangle = "lower")
+```
+
+## Scale variables
+
+Center length by median:
+```{r}
+phonlength.center = median(dataloan2$phonlength)
+dataloan2$phonlengthscale <-
+  dataloan2$phonlength - phonlength.center
+phonlength.scale = sd(dataloan2$phonlengthscale)
+dataloan2$phonlengthscale = dataloan2$phonlengthscale/phonlength.scale
+attr(dataloan2$phonlengthscale,"scaled:scale") = phonlength.scale
+attr(dataloan2$phonlengthscale,"scaled:center") = phonlength.center
+```
+Scale rest by mean:
+```{r}
+dataloan2$AoAscale <- scale(dataloan2$AoA)
+dataloan2$subtlexzipfscale <- scale(dataloan2$subtlexzipf)
+dataloan2$concscale <- scale(dataloan2$conc)
+dataloan2$iconscale <- scale(dataloan2$iconicity)
+```
+
+
+# Modelling
+
+First, a simple linear model trying to predict the rate of lexical replacement from Pagel et al. (2007). The power is too low to detect effects:
+
+```{r}
+a <- lm(pagel_rate ~ 
+          subtlexzipf + AoA + phonlength + 
+          iconicity + systematicity + conc + cat,
+        data = dataloan)
+summary(a)
+```
+
+Next, a simple logisitic model predicting borrowing from several variables including systematicity. Given the amount of missing data (see above), this only includes `r sum(complete.cases(dataloan[,c("bor15.cat","subtlexzipf","AoA","phonlength","iconicity","systematicity","conc","cat")]))` complete observations:
+
+```{r}
+b <- glm(bor15.cat ~ subtlexzipf + AoA + phonlength + 
+           iconicity + systematicity + conc + cat, 
+         data = dataloan, family=binomial)
+summary(b)
+```
+
+Now we model the main data. We first replicate the GAM from Monaghan & Roberts (2019). This predicts borrowing from length, age of acquisition, frequency, concreteness, with random intercepts for part of speech, and random slopes for variables by part of speech. Results are similar on this sub-sample of data, though frequency is no longer significant:
+
+```{r}
+m0 = bam(bor15.cat ~
+      s(phonlengthscale) + 
+      s(AoAscale) + 
+      s(subtlexzipfscale) +
+      s(concscale) +
+      s(cat,bs='re')+
+      s(cat,phonlengthscale,bs='re')+
+      s(cat,AoAscale,bs='re')+
+      s(cat,subtlexzipfscale,bs='re')+
+      s(cat,concscale,bs='re'),
+    data = dataloan2,
+    family='binomial')
+summary(m0)
+```
+
+Now the main GAM for the current paper, including iconicity as a predictor:
+
+```{r}
+m1= bam(bor15.cat ~
+      s(subtlexzipfscale) +
+      s(AoAscale) + 
+      s(phonlengthscale) + 
+      s(concscale) +
+      s(iconscale) +
+      s(cat,bs='re')+
+      s(cat,iconscale,bs='re')+
+      s(cat,phonlengthscale,bs='re')+
+      s(cat,AoAscale,bs='re')+
+      s(cat,subtlexzipfscale,bs='re')+
+      s(cat,concscale,bs='re'),
+    data = dataloan2,
+    family='binomial')
+
+summary(m1)
+```
+
+Pretty resuts:
+
+```{r}
+res = summary(m1)$s.table
+
+res = round(res,3)
+rownames(res)[rownames(res)=="s(subtlexzipfscale)"] = "Frequency"
+rownames(res)[rownames(res)=="s(AoAscale)"] = "AoA"
+rownames(res)[rownames(res)=="s(phonlengthscale)"] = "Length"
+rownames(res)[rownames(res)=="s(concscale)"] = "Concreteness"
+rownames(res)[rownames(res)=="s(iconscale)"] = "Iconicity"
+rownames(res)[rownames(res)=="s(cat)"] = "Grammatical category"
+res[,4][res[,4]==0] = "<0.001"
+res[,4] = gsub("0\\.",".",res[,4])
+res
+write.csv(res,file="GAM_results.csv")
+```
+
+Test only iconicity to show that it is an independent predictor:
+
+```{r}
+m2= bam(bor15.cat ~
+          s(iconscale),
+        data = dataloan2,
+        family='binomial')
+summary(m2)
+```
+
+## Visualise effects
+
+```{r}
+px = plot.gam(m1,select=1, xlab="Word length", ylab="Log odds of borrowing",shade = T)
+
+pfreq = rescaleGam(px,1,dataloan2$subtlexzipfscale, "Frequency",
+                   xlim = c(2,8), breaks=c(2,4,6,8,10,12)) 
+paoa = rescaleGam(px,2,dataloan2$AoAscale, "Age of acquisition",
+                  xlim=c(2,13),breaks=c(2,4,6,8,10,12,14)) 
+plen = rescaleGam(px,3,dataloan2$phonlengthscale, "Length",
+                  xlim=c(2,10),breaks=c(2,4,6,8,10)) 
+pconc = rescaleGam(px,4,dataloan2$concscale, "Concreteness",
+                   xlim = c(1,5), breaks=1:5) 
+picon = rescaleGam(px,5,dataloan2$iconscale, "Iconicity",
+                   xlim = c(0,4), breaks=c(0,1,2,3,4)) 
+```
+
+The plots below highlight which sections of the GAM splines are significantly increasing or decreasing. This method comes from [this source](https://www.fromthebottomoftheheap.net/2014/05/15/identifying-periods-of-change-with-gams/). The basic idea is to calculate the derivatives of the slope (how much the slope is increasing or decreasing) and then compute confidence intervals for the derivatives from their standard errors. If the confidence intervals of the derivatives do not overlap zero, then they are considered significant.
+
+```{r}
+pSigIcon = plotGAMSignificantSlopes(m1,"iconscale","Iconicity")
+pSigFreq = plotGAMSignificantSlopes(m1,"subtlexzipfscale","Frequency")
+pSigAoA = plotGAMSignificantSlopes(m1,"AoAscale","AoA")
+pSigLen = plotGAMSignificantSlopes(m1,"phonlengthscale","Word Length")
+pSigConc = plotGAMSignificantSlopes(m1,"concscale","Concreteness")
+```
+
+Plot increasing/decreasing curves onto the paoa,pfreq,picon,plen figures above.
+
+```{r warning=F}
+rescaleDerivitiesPlot = function(origPlot,sigCurveData){
+  sigCurveData$curve.x = origPlot$data$x
+  sigCurveData$m2.dsig.incr = logit2per(sigCurveData$m2.dsig.incr)
+  sigCurveData$m2.dsig.decr = logit2per(sigCurveData$m2.dsig.decr)
+  
+  ret = origPlot + 
+    geom_path(data = sigCurveData, 
+              aes(x = curve.x, 
+                  y = m2.dsig.incr),
+              size=0.9) +
+    geom_path(data = sigCurveData, 
+              aes(x = curve.x, 
+                  y = m2.dsig.decr),
+              size=0.9) +
+    theme(legend.position = 'none') 
+  return(ret)
+}
+
+pSigIcon2 = rescaleDerivitiesPlot(picon,pSigIcon)
+pSigLen2 = rescaleDerivitiesPlot(plen,pSigLen)
+pSigAoA2 = rescaleDerivitiesPlot(paoa,pSigAoA)
+pSigFreq2 = rescaleDerivitiesPlot(pfreq,pSigFreq)
+pSigConc2 = rescaleDerivitiesPlot(pconc,pSigConc)
+
+pSigIcon2
+pSigLen2
+pSigAoA2
+pSigFreq2
+pSigConc2
+
+# All together:
+gx = grid.arrange(pSigIcon2, 
+             pSigLen2 + theme(axis.title.y = element_blank()), 
+             pSigAoA2 + theme(axis.title.y = element_blank()),
+             layout_matrix=matrix(1:3,nrow = 1),
+             widths=c(1.1,1,1))
+plot(gx)
+```
+
+Output to file:
+
+```{r warning=F}
+pdf("Results_Iconicity.pdf",width=3,height=3)
+  pSigIcon2
+dev.off()
+
+pdf("Results.pdf", width=6,height=3)
+  plot(gx)
+dev.off()
+```
+
+\clearpage
+\newpage
+
+# Decision tree
+
+Use a decision tree to look at interactions and importance. There's no need to use scaled variables with decision trees.
+
+```{r}
+set.seed(3289)
+t = ctree(factor(bor15,levels=c(0,1),labels=c("N","Y"))~
+                  phonlength + AoA +
+                  subtlexzipf + conc +
+                  iconicity + cat,
+          data = dataloan2)
+plot(t,terminal_panel = node_barplot(t,beside=T,id=F),
+     inner_panel = node_inner(t,id=F))
+# output to file
+pdf("ResultsDecisionTree.pdf",width=7,height=5)
+plot(t,terminal_panel = node_barplot(t,beside=T,id=F),
+     inner_panel = node_inner(t,id=F))
+dev.off()
+```
+
+The decision tree above suggests that the biggest effect of iconicity is for longer words learned later in life.  Next, we use random forests to estimate relative importance of measures:
+
+```{r cache=T}
+set.seed(3289)
+f = cforest(bor15.cat~phonlength + AoA +
+              subtlexzipf + conc +
+              iconicity + cat,
+          data = dataloan2)
+variableImportance = varimp(f)
+variableImportance
+dotplot(sort(variableImportance,decreasing = F))
+
+ctreeOrder = c("subtlexzipf","AoA","phonlength","conc","iconicity","cat")
+plot(variableImportance[ctreeOrder]*1000,
+     summary(m1)$s.table[1:length(ctreeOrder),3],
+     xlab="Decision tree variable importance",
+     ylab="GAM Chi.sq")
+text(variableImportance[ctreeOrder]*1000,summary(m1)$s.table[1:length(ctreeOrder),3],ctreeOrder,pos=1)
+abline(0,1)
+```
+
+The importance values agree with the Chi.sq values from the GAM (r = `r round(cor(variableImportance[ctreeOrder]*1000,summary(m1)$s.table[1:length(ctreeOrder),3]),2)`. The effect of iconicity looks like it applies after the effects of length and AoA.
+
