@@ -33,6 +33,7 @@ Below is a list of variable names in the data with a short explanation:
 -  pagel_rate: Rate of lexical replacement from Pagel, Atkinson & Meade (2007)
 -  iconicity: Iconicity rating from Winter et al. (2017). The data actually comes from the supporting materials for Perry et al. (2018), which has slightly more data.
 -  systematicity: Systematicity ratings from Monaghan et al. (2014)
+-  effect: Whether a word was not borrowed versus different types of borrowing: replacement, coexistence or insertion. Values are NA if there is no information available.
 
 ## References
 
@@ -64,6 +65,7 @@ library(gridExtra)
 library(Hmisc)
 library(survival)
 library(Formula)
+library(tidyverse)
 ```
 
 Custom functions for rescaling gam results and making table of correlations. This also loads the custom script *GAM_derivatives.R* which runs the analysis of slope significance.
@@ -184,7 +186,7 @@ apply(dataloan[,c("iconicity",'iconicity2')],2,function(X){sum(!is.na(X))})
 dataloan$iconicity = dataloan$iconicity2
 ```
 
-# Data preperation
+# Data preparation
 
 Create binary borrowing variable:
 
@@ -192,7 +194,6 @@ Create binary borrowing variable:
 dataloan$bor15 <- ifelse(dataloan$borrowing==1,1, ifelse(dataloan$borrowing==5,0,NA))
 dataloan$bor15.cat <- factor(dataloan$bor15)
 ```
-
 
 Percentage of missing data for each variable:
 
@@ -382,6 +383,8 @@ a <- lm(pagel_rate ~
 summary(a)
 ```
 
+\newpage
+
 Next, a simple logisitic model predicting borrowing from several variables including systematicity. Given the amount of missing data (see above), this only includes `r sum(complete.cases(dataloan[,c("bor15.cat","subtlexzipf","AoA","phonlength","iconicity","systematicity","conc","cat")]))` complete observations:
 
 ```{r}
@@ -391,7 +394,9 @@ b <- glm(bor15.cat ~ subtlexzipf + AoA + phonlength +
 summary(b)
 ```
 
-Now we model the main data. We first replicate the GAM from Monaghan & Roberts (2019). This predicts borrowing from length, age of acquisition, frequency, concreteness, with random intercepts for part of speech, and random slopes for variables by part of speech. Results are similar on this sub-sample of data, though frequency is no longer significant:
+\newpage
+
+Now we model the data with a GAM. We first replicate the GAM from Monaghan & Roberts (2019). This predicts borrowing from length, age of acquisition, frequency, concreteness, with random intercepts for part of speech, and random slopes for variables by part of speech. Results are similar on this sub-sample of data, though frequency is no longer significant:
 
 ```{r}
 m0 = bam(bor15.cat ~
@@ -409,7 +414,9 @@ m0 = bam(bor15.cat ~
 summary(m0)
 ```
 
-Now the main GAM for the current paper, including iconicity as a predictor:
+\newpage
+
+Now the main GAM for the current paper, which takes the previous model and adds iconicity as a predictor:
 
 ```{r}
 m1= bam(bor15.cat ~
@@ -430,7 +437,7 @@ m1= bam(bor15.cat ~
 summary(m1)
 ```
 
-Pretty resuts:
+Pretty results:
 
 ```{r}
 res = summary(m1)$s.table
@@ -460,6 +467,8 @@ summary(m2)
 
 ## Visualise effects
 
+Some fo the plots below highlight which sections of the GAM splines are significantly increasing or decreasing. This method comes from [this source](https://www.fromthebottomoftheheap.net/2014/05/15/identifying-periods-of-change-with-gams/). The basic idea is to calculate the derivatives of the slope (how much the slope is increasing or decreasing) and then compute confidence intervals for the derivatives from their standard errors. If the confidence intervals of the derivatives do not overlap zero, then they are considered significant.
+
 ```{r}
 px = plot.gam(m1,select=1, xlab="Word length", ylab="Log odds of borrowing",shade = T)
 
@@ -473,11 +482,7 @@ pconc = rescaleGam(px,4,dataloan2$concscale, "Concreteness",
                    xlim = c(1,5), breaks=1:5) 
 picon = rescaleGam(px,5,dataloan2$iconscale, "Iconicity",
                    xlim = c(0,4), breaks=c(0,1,2,3,4)) 
-```
 
-The plots below highlight which sections of the GAM splines are significantly increasing or decreasing. This method comes from [this source](https://www.fromthebottomoftheheap.net/2014/05/15/identifying-periods-of-change-with-gams/). The basic idea is to calculate the derivatives of the slope (how much the slope is increasing or decreasing) and then compute confidence intervals for the derivatives from their standard errors. If the confidence intervals of the derivatives do not overlap zero, then they are considered significant.
-
-```{r}
 pSigIcon = plotGAMSignificantSlopes(m1,"iconscale","Iconicity")
 pSigFreq = plotGAMSignificantSlopes(m1,"subtlexzipfscale","Frequency")
 pSigAoA = plotGAMSignificantSlopes(m1,"AoAscale","AoA")
@@ -613,10 +618,244 @@ ctreeOrder = c("subtlexzipf","AoA","phonlength","conc","iconicity","cat")
 plot(variableImportance[ctreeOrder]*1000,
      summary(m1)$s.table[1:length(ctreeOrder),3],
      xlab="Decision tree variable importance",
-     ylab="GAM Chi.sq")
-text(variableImportance[ctreeOrder]*1000,summary(m1)$s.table[1:length(ctreeOrder),3],ctreeOrder,pos=1)
+     ylab="GAM Chi.sq",
+     xlim=c(0,60))
+text(variableImportance[ctreeOrder]*1000,summary(m1)$s.table[1:length(ctreeOrder),3],ctreeOrder,pos=4)
 abline(0,1)
 ```
 
 The importance values agree with the Chi.sq values from the GAM (r = `r round(cor(variableImportance[ctreeOrder]*1000,summary(m1)$s.table[1:length(ctreeOrder),3]),2)`. The effect of iconicity looks like it applies after the effects of length and AoA.
+
+\clearpage
+\newpage
+
+# Distinguish borrowing effect information
+
+There are different kinds of borrowing scenario, including a word replacing an existing word, coexisting with an existing word or being inserted into the language (e.g. for a new concept or artefact that doesn't yet have a name). Do the psycholinguistic predictors relate differently to each of these types?
+
+There are a few ways of testing the relationships between them. The first is to check whether the correlations are robust when running the model only on words that belong to just one category of borrowing (vs. not borrowed).
+
+The analyses below show broad consistencies:
+
+-  For all types, lower iconicity is associated with greater probability of borrowing, though this was not significant for replacements (p = 0.5). 
+-  For all types, longer words are associated with greater probaility of borrowing.
+-  For replacements, words learned later in life are associated with grater probability of borrowing. The relationship with AoA is similar but not significant for coexisting words (p = 0.12) or insertions (p = 0.13).
+
+The second approach is to try to tell the difference between the different borrowing types. The main models above try to estimate whether a word is borrowed or not based on psycholinguistic predictors (frequency, iconicity etc.). The model below tries to predict which fine-grained category a word belongs to (not borrowed, replaced, coexisting with an existing word, or inserted), based on the psycholinguistic predictors. This requires a multinomial GAM. We use non-borrowed words as the intercept condition. The model estimates smooth curve parameters for each category. A significant factor indicates that the given category (e.g. replacements) has a significanlty different relation with a given factor (e.g. age of acquisition) compared to the intercept condition.
+
+The analyses below show:
+
+-  Length predicts likelihood of borrowing for all three types.
+-  AoA predicts likelihood of borrowing for all three types.
+-  Iconicity predicts likelihood of borrowing for replacements and coexisting words, but not significanly for insertions.
+
+The only interesting differences between the three borrowing types are:
+
+-  High concreteness is a predictor of insertion (but not other types of borrowing). This makes sense: many of the words that did not exist before the borrowing are technological innovations.
+-  Iconicity is not a predictor for words that replace others.
+
+\newpage
+
+Below are the distributions of various psycholinguistic predictors by different borrowing types:
+
+```{r fig.height=1}
+dataloan2$effect = factor(dataloan2$effect,
+          levels=c("Not borrowed","Replacement","Coexistence","Insertion"))
+ggplot(dataloan2[!is.na(dataloan2$effect),],aes(x=effect,y=iconicity)) +
+  geom_boxplot()+ylab("Iconicity")+coord_flip()
+ggplot(dataloan2[!is.na(dataloan2$effect),], aes(x=effect,y=phonlength))+
+  geom_boxplot()+ylab("Length")+coord_flip()
+ggplot(dataloan2[!is.na(dataloan2$effect),],aes(x=effect,y=AoA))+
+  geom_boxplot()+coord_flip()
+ggplot(dataloan2[!is.na(dataloan2$effect),],aes(x=effect,y=subtlexzipf))+
+  geom_boxplot()+ylab("Frequency")+coord_flip()
+ggplot(dataloan2[!is.na(dataloan2$effect),],aes(x=effect,y=conc))+
+  geom_boxplot()+ylab("Concreteness")+coord_flip()
+```
+
+
+\newpage
+
+## Models for each borrowing type
+
+**Replacements**: Repeat GAM for only those words that are classified as Replacements vs. not borrowed:
+
+```{r}
+m1r= update(m1, data = dataloan2[dataloan2$effect %in% c("Not borrowed","Replacement"),])
+cat(paste(capture.output(summary(m1r))[18:32],collapse="\n"))
+```
+
+Visualise effects (duplicated visualisation code is hidden, see the RMD file):
+
+```{r fig.show="hide", echo=F, warning=F,message=F}
+visGam = function(mx){
+  px = plot.gam(mx,select=1, xlab="Word length", 
+                ylab="Log odds of borrowing",shade = T)
+  pfreq = rescaleGam(px,1,dataloan2$subtlexzipfscale, "Frequency",
+                     xlim = c(2,8), breaks=c(2,4,6,8,10,12)) 
+  paoa = rescaleGam(px,2,dataloan2$AoAscale, "Age of acquisition",
+                    xlim=c(2,13),breaks=c(2,4,6,8,10,12,14)) 
+  plen = rescaleGam(px,3,dataloan2$phonlengthscale, "Length",
+                    xlim=c(2,10),breaks=c(2,4,6,8,10)) 
+  pconc = rescaleGam(px,4,dataloan2$concscale, "Concreteness",
+                     xlim = c(1,5), breaks=1:5) 
+  picon = rescaleGam(px,5,dataloan2$iconscale, "Iconicity",
+                     xlim = c(0,4), breaks=c(0,1,2,3,4)) 
+  pSigIcon = plotGAMSignificantSlopes(mx,"iconscale","Iconicity")
+  pSigFreq = plotGAMSignificantSlopes(mx,"subtlexzipfscale","Frequency")
+  pSigAoA = plotGAMSignificantSlopes(mx,"AoAscale","AoA")
+  pSigLen = plotGAMSignificantSlopes(mx,"phonlengthscale","Word Length")
+  pSigConc = plotGAMSignificantSlopes(mx,"concscale","Concreteness")
+  
+  pSigIcon2 = rescaleDerivitiesPlot(picon,pSigIcon)
+  pSigLen2 = rescaleDerivitiesPlot(plen,pSigLen)
+  pSigAoA2 = rescaleDerivitiesPlot(paoa,pSigAoA)
+  pSigFreq2 = rescaleDerivitiesPlot(pfreq,pSigFreq)
+  pSigConc2 = rescaleDerivitiesPlot(pconc,pSigConc)
+  gx = grid.arrange(pSigIcon2, 
+                    pSigFreq2 + ylab("Probability of borrowing"),
+               pSigLen2 + theme(axis.title.y = element_blank()), 
+               pSigConc2 +theme(axis.title.y = element_blank()),
+               pSigAoA2 + theme(axis.title.y = element_blank()),
+               grid.rect(gp=gpar(col="white")),
+               layout_matrix=matrix(1:6,nrow = 2),
+               widths=c(1.1,1,1))
+  return(gx)
+  
+}
+m1r.vis =visGam(m1r)
+```
+
+```{r}
+plot(m1r.vis)
+```
+
+\newpage
+
+**Coexistence**: Repeat GAM only for coexistence words vs words that are not borrowed:
+
+```{r fig.show="hide", warning=F, message=F}
+m1c= update(m1, data = dataloan2[
+  dataloan2$effect %in% c("Not borrowed","Coexistence"),])
+cat(paste(capture.output(summary(m1c))[18:32],collapse="\n"))
+m1c.vis = visGam(m1c)
+```
+
+Visualise effects:
+
+```{r}
+plot(m1c.vis)
+```
+
+\newpage
+
+**Insertion**: Repeat GAM only for insertions vs words that are not borrowed:
+
+```{r fig.show="hide", warning=F, message=F}
+m1i= update(m1, data = dataloan2[
+  dataloan2$effect %in% c("Not borrowed","Insertion"),])
+cat(paste(capture.output(summary(m1i))[18:32],collapse="\n"))
+m1i.vis = visGam(m1i)
+```
+
+Visualise effects:
+
+```{r}
+plot(m1i.vis)
+```
+
+\clearpage
+\newpage
+
+## Multinomial model of all types
+
+```{r cache=T,warning=F}
+# Code effect as a number 0-3 so that we can run the GAM
+dataloan2$effect_num = as.numeric(dataloan2$effect) -1
+
+# Run a multinomial GAM
+mRCI = gam(list(
+          effect_num ~
+          # Model for Replacements
+           s(subtlexzipfscale) + s(AoAscale) + s(phonlengthscale) + 
+           s(concscale) + s(iconscale) + s(cat,bs='re'),
+          # Model for Coexistence
+          ~s(subtlexzipfscale) + s(AoAscale) + s(phonlengthscale) + 
+            s(concscale) + s(iconscale) + s(cat,bs='re'),
+          # Model for Insertions
+          ~s(subtlexzipfscale) + s(AoAscale) + s(phonlengthscale) + 
+            s(concscale) + s(iconscale) + s(cat,bs='re')
+          ),
+         data = dataloan2[!is.na(dataloan2$effect_num),],
+         family=multinom(K=3))
+```
+
+In the summary below, the first set of numbers "s" are for replacements, the second "s.1" are for coexistence and the third "s.2" are for insertions.
+
+```{r}
+summary(mRCI)
+```
+
+The exact relationships are hard to determine from the model output, so we also visalise the model. Note that these graphs are not representations of the data, but representations of the model estimates.
+
+```{r cache=T, warning=F}
+getPred = function(gModel){
+  # Get model predictions for range of variable values
+  nx = 10
+  gr = expand.grid(
+    subtlexzipfscale = seq(-3,3,length.out = nx),
+    AoAscale = seq(-3,3,length.out = nx),
+    phonlengthscale = seq(-3,3,length.out = nx),
+    concscale = seq(-3,3,length.out = nx),
+    iconscale = seq(-3,3,length.out = nx)
+  )
+  gr$cat = "Noun"
+  pred = predict(gModel,newdata=gr, type="response")
+  colnames(pred) = c("Not borrowed","Replacement","Coexistence","Insertion")
+  gr = cbind(gr,pred)
+  return(gr)
+
+}
+
+visualiseMultinomGamModel = function(gr,fac,xlabel,rType,cType,iType){
+  
+  grs = gr %>% group_by(!!as.name(fac)) %>% 
+    summarise(R=mean(Replacement),
+              C=mean(Coexistence),
+              I=mean(Insertion),
+              NB=mean(`Not borrowed`))
+  names(grs)[1] = "subtlexzipfscale"
+  
+  gx =  ggplot(grs,aes(x=subtlexzipfscale,y=R)) +
+    geom_line(mapping = aes(y=NB,colour="gray")) + 
+    geom_line(aes(colour="black"),linetype = rType) + 
+    geom_line(mapping = aes(y=C,colour="green"),linetype = cType) + 
+    geom_line(mapping = aes(y=I,colour="red"),linetype = iType) + 
+    ylab("Probability of borrowing") + xlab(xlabel) +
+    scale_color_identity(name = "Type", breaks=c("black","green","red","gray"),
+          labels = c("Replacement", "Coexistence", "Insertion","Not borrowed"),
+                  guide="legend") #+ ylim(0,0.3)
+  return(gx)
+}
+
+gr = getPred(mRCI)
+
+grid.arrange(
+  visualiseMultinomGamModel(gr,"iconscale","Iconicity","dashed","solid","solid") +
+    theme(legend.position = "none"),
+  visualiseMultinomGamModel(gr,"subtlexzipfscale","Frequency","dashed","dashed","dashed") +
+    theme(legend.position = "none"),
+  visualiseMultinomGamModel(gr,"phonlengthscale","Length","solid","solid","solid") +
+    theme(legend.position = "none"),
+  visualiseMultinomGamModel(gr,"concscale","Concreteness","dashed","dashed","solid") +
+    theme(legend.position = "none"),
+  visualiseMultinomGamModel(gr,"AoAscale","AoA","solid","solid","solid"),
+layout_matrix = matrix(1:6,nrow=2),
+widths = c(1,1,1.6)
+)
+
+```
+
+
+The figure above shows the model esimates from multinomial model. The probabilities on the y-axis are the model's estimated likelihood of a word belonging to each of the three borrowed categories. The lines show these probabilities change according to different values of the x-axis. Lines are solid if the effect is significant and dotted if the effect is not significant. For example, the probabilities of all three types of borrowing increase as length increases. Logically, this implies that the probability of being non-borrowed decreases as word length increases.
 
