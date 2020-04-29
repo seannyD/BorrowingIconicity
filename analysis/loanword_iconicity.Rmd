@@ -647,7 +647,7 @@ The analyses below show:
 
 -  Length predicts likelihood of borrowing for all three types.
 -  AoA predicts likelihood of borrowing for all three types.
--  Iconicity predicts likelihood of borrowing for replacements and coexisting words, but not significanly for insertions.
+-  Iconicity predicts likelihood of borrowing for insertions and coexisting words, but not significantly for replacements.
 
 The only interesting differences between the three borrowing types are:
 
