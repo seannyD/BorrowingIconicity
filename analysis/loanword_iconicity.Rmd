@@ -958,12 +958,12 @@ pSigConc2 = rescaleDerivitiesPlot(pconc,pSigConc)
 #pSigConc2
 
 # All together:
-gx = grid.arrange(pSigIcon2, 
+grid.arrange(pSigIcon2, 
              pSigLen2 + theme(axis.title.y = element_blank()), 
              pSigAoA2 + theme(axis.title.y = element_blank()),
              layout_matrix=matrix(1:3,nrow = 1),
              widths=c(1.1,1,1))
-plot(gx)
+
 ```
 
 
