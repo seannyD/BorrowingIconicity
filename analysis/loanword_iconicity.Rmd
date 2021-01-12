@@ -24,7 +24,7 @@ Below is a list of variable names in the data with a short explanation:
 -  phonology:  Phonological form
 -  phonlength:  Number of segments in the phonological form
 -  AoA: Age of acquisition ratings from Kuperman, Stadthagen-Gonzalez, and Brysbaert (2012).
--  AoA\_obj: Objective, test-based age of acuqisition from Brysbaert & Biemiller (2017)
+-  AoAObj: Objective, test-based age of acquisition from Brysbaert & Biemiller (2017)
 -  subtlexzipf:  Log frequency of word from the SUBTLEX database
 -  conc:  Concreteness ratings from Brysbaert, Warriner, & Kuperman (2014)
 -  cat: Dominant part of speech according to SUBTLEX.
@@ -33,7 +33,8 @@ Below is a list of variable names in the data with a short explanation:
 -  pagel_rate: Rate of lexical replacement from Pagel, Atkinson & Meade (2007)
 -  iconicity: Iconicity rating from Winter et al. (2017). The data actually comes from the supporting materials for Perry et al. (2018), which has slightly more data.
 -  systematicity: Systematicity ratings from Monaghan et al. (2014)
--  effect: Whether a word was not borrowed versus different types of borrowing: replacement, coexistence or insertion. Values are NA if there is no information available.
+-  borrowing_type: Whether a word was not borrowed versus different types of borrowing: replacement, coexistence or insertion. Values are NA if there is no information available.
+-  borrowing_type_num: The effect categories, turned into numbers for the GAM model.
 
 ## References
 
@@ -629,7 +630,7 @@ The importance values agree with the Chi.sq values from the GAM (r = `r round(co
 \clearpage
 \newpage
 
-# Distinguish borrowing effect information
+# Distinguish borrowing type information
 
 There are different kinds of borrowing scenario, including a word replacing an existing word, coexisting with an existing word or being inserted into the language (e.g. for a new concept or artefact that doesn't yet have a name). Do the psycholinguistic predictors relate differently to each of these types?
 
@@ -659,17 +660,17 @@ The only interesting differences between the three borrowing types are:
 Below are the distributions of various psycholinguistic predictors by different borrowing types:
 
 ```{r fig.height=1}
-dataloan2$effect = factor(dataloan2$effect,
+dataloan2$borrowing_type = factor(dataloan2$borrowing_type,
           levels=c("Not borrowed","Replacement","Coexistence","Insertion"))
-ggplot(dataloan2[!is.na(dataloan2$effect),],aes(x=effect,y=iconicity)) +
+ggplot(dataloan2[!is.na(dataloan2$borrowing_type),],aes(x=borrowing_type,y=iconicity)) +
   geom_boxplot()+ylab("Iconicity")+coord_flip()
-ggplot(dataloan2[!is.na(dataloan2$effect),], aes(x=effect,y=phonlength))+
+ggplot(dataloan2[!is.na(dataloan2$borrowing_type),], aes(x=borrowing_type,y=phonlength))+
   geom_boxplot()+ylab("Length")+coord_flip()
-ggplot(dataloan2[!is.na(dataloan2$effect),],aes(x=effect,y=AoA))+
+ggplot(dataloan2[!is.na(dataloan2$borrowing_type),],aes(x=borrowing_type,y=AoA))+
   geom_boxplot()+coord_flip()
-ggplot(dataloan2[!is.na(dataloan2$effect),],aes(x=effect,y=subtlexzipf))+
+ggplot(dataloan2[!is.na(dataloan2$borrowing_type),],aes(x=borrowing_type,y=subtlexzipf))+
   geom_boxplot()+ylab("Frequency")+coord_flip()
-ggplot(dataloan2[!is.na(dataloan2$effect),],aes(x=effect,y=conc))+
+ggplot(dataloan2[!is.na(dataloan2$borrowing_type),],aes(x=borrowing_type,y=conc))+
   geom_boxplot()+ylab("Concreteness")+coord_flip()
 ```
 
@@ -681,7 +682,7 @@ ggplot(dataloan2[!is.na(dataloan2$effect),],aes(x=effect,y=conc))+
 **Replacements**: Repeat GAM for only those words that are classified as Replacements vs. not borrowed:
 
 ```{r}
-m1r= update(m1, data = dataloan2[dataloan2$effect %in% c("Not borrowed","Replacement"),])
+m1r= update(m1, data = dataloan2[dataloan2$borrowing_type %in% c("Not borrowed","Replacement"),])
 cat(paste(capture.output(summary(m1r))[18:32],collapse="\n"))
 ```
 
@@ -736,7 +737,7 @@ plot(m1r.vis)
 
 ```{r fig.show="hide", warning=F, message=F}
 m1c= update(m1, data = dataloan2[
-  dataloan2$effect %in% c("Not borrowed","Coexistence"),])
+  dataloan2$borrowing_type %in% c("Not borrowed","Coexistence"),])
 cat(paste(capture.output(summary(m1c))[18:32],collapse="\n"))
 m1c.vis = visGam(m1c)
 ```
@@ -753,7 +754,7 @@ plot(m1c.vis)
 
 ```{r fig.show="hide", warning=F, message=F}
 m1i= update(m1, data = dataloan2[
-  dataloan2$effect %in% c("Not borrowed","Insertion"),])
+  dataloan2$borrowing_type %in% c("Not borrowed","Insertion"),])
 cat(paste(capture.output(summary(m1i))[18:32],collapse="\n"))
 m1i.vis = visGam(m1i)
 ```
@@ -770,12 +771,12 @@ plot(m1i.vis)
 ## Multinomial model of all types
 
 ```{r cache=T,warning=F}
-# Code effect as a number 0-3 so that we can run the GAM
-dataloan2$effect_num = as.numeric(dataloan2$effect) -1
+# Code borrowing type as a number 0-3 so that we can run the GAM
+dataloan2$borrowing_type_num = as.numeric(dataloan2$borrowing_type) -1
 
 # Run a multinomial GAM
 mRCI = gam(list(
-          effect_num ~
+          borrowing_type_num ~
           # Model for Replacements
            s(subtlexzipfscale) + s(AoAscale) + s(phonlengthscale) + 
            s(concscale) + s(iconscale) + s(cat,bs='re'),
@@ -786,7 +787,7 @@ mRCI = gam(list(
           ~s(subtlexzipfscale) + s(AoAscale) + s(phonlengthscale) + 
             s(concscale) + s(iconscale) + s(cat,bs='re')
           ),
-         data = dataloan2[!is.na(dataloan2$effect_num),],
+         data = dataloan2[!is.na(dataloan2$borrowing_type_num),],
          family=multinom(K=3))
 ```
 
@@ -858,4 +859,111 @@ widths = c(1,1,1.6)
 
 
 The figure above shows the model esimates from multinomial model. The probabilities on the y-axis are the model's estimated likelihood of a word belonging to each of the three borrowed categories. The lines show these probabilities change according to different values of the x-axis. Lines are solid if the effect is significant and dotted if the effect is not significant. For example, the probabilities of all three types of borrowing increase as length increases. Logically, this implies that the probability of being non-borrowed decreases as word length increases.
+
+\clearpage
+\newpage
+
+# Objective age of acquisition
+
+Run a model with objective age of acqusition instead of the ratings measure. Objective measure taken from test-based age of acquisition from Brysbaert & Biemiller (2017).
+
+```{r}
+obj = read.csv("../data/Brysbaert_Biemiller_TestBasedAoAMeasures.csv",
+   stringsAsFactors = F, encoding = "UTF-8",
+   fileEncoding = "UTF-8")
+obj[obj$WORD=="sew up",]$WORD = "sew"
+dataloan2$AoAObj = obj[match(dataloan2$word,obj$WORD),]$AoAtestbased
+dataloan2$AoAObjScale = scale(dataloan2$AoAObj)
+```
+
+The correlation between objective and ratings-based AoA is high:
+
+```{r}
+plot(dataloan2$AoA~dataloan2$AoAObj)
+cor.test(dataloan2$AoA,dataloan2$AoAObj,na.rm=T)
+```
+
+Run model with objective AoA. Note that the results are qualitatively the same as the main model.
+
+```{r}
+m1Obj = bam(bor15.cat ~
+      s(subtlexzipfscale) +
+      s(AoAObjScale, k = 6) + 
+      s(phonlengthscale) + 
+      s(concscale) +
+      s(iconscale) +
+      s(cat,bs='re')+
+      s(cat,iconscale,bs='re')+
+      s(cat,phonlengthscale,bs='re')+
+      s(cat,AoAObjScale,bs='re')+
+      s(cat,subtlexzipfscale,bs='re')+
+      s(cat,concscale,bs='re'),
+    data = dataloan2,
+    family='binomial')
+
+summary(m1Obj)
+```
+
+Visualise (code as above, but hidden). For age of acquisition, there is more uncertainty around the later ages, but in general the results are very similar.
+
+```{r echo=F}
+px = plot.gam(m1Obj,select=1, xlab="Word length", ylab="Log odds of borrowing",shade = T)
+
+pfreq = rescaleGam(px,1,dataloan2$subtlexzipfscale, "Frequency",
+                   xlim = c(2,8), breaks=c(2,4,6,8,10,12)) 
+paoa = rescaleGam(px,2,dataloan2$AoAObjScale, "Age of acquisition (objective)",
+                  xlim=c(2,13),breaks=c(2,4,6,8,10,12,14)) 
+plen = rescaleGam(px,3,dataloan2$phonlengthscale, "Length",
+                  xlim=c(2,10),breaks=c(2,4,6,8,10)) 
+pconc = rescaleGam(px,4,dataloan2$concscale, "Concreteness",
+                   xlim = c(1,5), breaks=1:5) 
+picon = rescaleGam(px,5,dataloan2$iconscale, "Iconicity",
+                   xlim = c(0,4), breaks=c(0,1,2,3,4)) 
+
+pSigIcon = plotGAMSignificantSlopes(m1Obj,"iconscale","Iconicity")
+pSigFreq = plotGAMSignificantSlopes(m1Obj,"subtlexzipfscale","Frequency")
+pSigAoA = plotGAMSignificantSlopes(m1Obj,"AoAObjScale","AoA (objective)")
+pSigLen = plotGAMSignificantSlopes(m1Obj,"phonlengthscale","Word Length")
+pSigConc = plotGAMSignificantSlopes(m1Obj,"concscale","Concreteness")
+
+
+rescaleDerivitiesPlot = function(origPlot,sigCurveData){
+  sigCurveData$curve.x = origPlot$data$x
+  sigCurveData$m2.dsig.incr = logit2per(sigCurveData$m2.dsig.incr)
+  sigCurveData$m2.dsig.decr = logit2per(sigCurveData$m2.dsig.decr)
+  
+  ret = origPlot + 
+    geom_path(data = sigCurveData, 
+              aes(x = curve.x, 
+                  y = m2.dsig.incr),
+              size=0.9) +
+    geom_path(data = sigCurveData, 
+              aes(x = curve.x, 
+                  y = m2.dsig.decr),
+              size=0.9) +
+    theme(legend.position = 'none') 
+  return(ret)
+}
+
+pSigIcon2 = rescaleDerivitiesPlot(picon,pSigIcon)
+pSigLen2 = rescaleDerivitiesPlot(plen,pSigLen)
+pSigAoA2 = rescaleDerivitiesPlot(paoa,pSigAoA)
+pSigFreq2 = rescaleDerivitiesPlot(pfreq,pSigFreq)
+pSigConc2 = rescaleDerivitiesPlot(pconc,pSigConc)
+
+#pSigIcon2
+#pSigLen2
+#pSigAoA2
+#pSigFreq2
+#pSigConc2
+
+# All together:
+gx = grid.arrange(pSigIcon2, 
+             pSigLen2 + theme(axis.title.y = element_blank()), 
+             pSigAoA2 + theme(axis.title.y = element_blank()),
+             layout_matrix=matrix(1:3,nrow = 1),
+             widths=c(1.1,1,1))
+plot(gx)
+```
+
 

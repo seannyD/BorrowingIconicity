@@ -1,4 +1,4 @@
-"","word","borrowing","age_oldest","age_youngest","age_oldest_num","age_youngest_num","word.1","phonology","phonlength","AoA","subtlexzipf","conc","cat","nounornot","verbornot","adjornot","advornot","pronounornot","functionornot","numberornot","pagel_rate","iconicity","systematicity","effect"
+"","word","borrowing","age_oldest","age_youngest","age_oldest_num","age_youngest_num","word.1","phonology","phonlength","AoA","subtlexzipf","conc","cat","nounornot","verbornot","adjornot","advornot","pronounornot","functionornot","numberornot","pagel_rate","iconicity","systematicity","borrowing_type"
 "1","handkerchief",7,"1530","1530","470","470","handkerchief","h{Nk@JIf",8,"7.22","3.21","5","Noun",1,0,0,0,0,0,0,"#N/A","#N/A","#N/A",NA
 "2","bicycle",7,"#N/A","#N/A","#N/A","#N/A","bicycle","b2sIkP",6,"4.26","3.92","4.89","Noun",1,0,0,0,0,0,0,"#N/A","2.272727273","#N/A",NA
 "3","radio",5,"1913","1913","87","87","radio","r1dI5",5,"5.17","4.82","4.74","Noun",1,0,0,0,0,0,0,"#N/A","0.583333333","#N/A","Not borrowed"
